@@ -1,1 +1,4 @@
 /WumpusWorld_A*
+*.pdf
+/WumpusWorld/.idea
+*.iml
