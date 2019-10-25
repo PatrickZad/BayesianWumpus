@@ -2,3 +2,4 @@
 *.pdf
 /WumpusWorld/.idea
 *.iml
+/WumpusWorld/out
