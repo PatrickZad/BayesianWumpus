@@ -1,7 +1,7 @@
 package wumpusworld;
 
-import java.nio.charset.CoderResult;
 import java.util.*;
+import java.lang.Math;
 
 /**
  * Contains starting code for creating your own Wumpus World agent.
@@ -17,9 +17,11 @@ public class MyAgent implements Agent
     /**
      * Record progress of the game
      */
-    private Set<Coordinate> frotier;
-    private Set<Coordinate> known;
+    private List<Coordinate> frontier=new ArrayList<>();
+    private List<Coordinate> known=new ArrayList<>();
     private Coordinate[][] coordinates = new Coordinate[4][4];
+    private List<Coordinate> knownPits = new ArrayList<>();
+    private List<Coordinate> knownWumpus = new ArrayList<>();
 
     class Coordinate {
         final int x;
@@ -96,8 +98,8 @@ public class MyAgent implements Agent
             coordinates[i][j]=new Coordinate(i+1, j+1);
         }
         known.add(coordinates[0][0]);
-        frotier.add(coordinates[0][1]);
-        frotier.add(coordinates[1][0]);
+        frontier.add(coordinates[0][1]);
+        frontier.add(coordinates[1][0]);
     }
    
             
@@ -125,9 +127,16 @@ public class MyAgent implements Agent
         if (w.isInPit())
         {
             w.doAction(World.A_CLIMB);
+            knownPits.add(coordinates[w.getPlayerX()-1][w.getPlayerY()-1]);
             return;
         }
-        
+
+        //Take actions
+
+        Coordinate destination = selectFrontier();
+        moveToDestination(destination);
+
+        /*
         //Test the environment
         if (w.hasBreeze(cX, cY))
         {
@@ -182,7 +191,7 @@ public class MyAgent implements Agent
         {
             w.doAction(World.A_TURN_RIGHT);
             w.doAction(World.A_MOVE);
-        }
+        }*/
                 
     }    
     
@@ -195,26 +204,300 @@ public class MyAgent implements Agent
     }
 
     /**
-     * find way to a frontier root
+     * Decide which frontier to go
+     * @return
      */
-    private void moveTo(Coordinate destination){
-        //find path
-        Coordinate current = coordinates[w.getPlayerX()-1][w.getPlayerY()-1];
-        Stack<Coordinate> path = new Stack<>();
-        path.push(destination);
-        Coordinate next=null;
-        for (int i=0; i<destination.neighbors.size(); i++){
-            next=destination.neighbors.get(i);
-            if (w.isVisited(next.x, next.y)){
-                break;
+    private Coordinate selectFrontier(){
+        Coordinate destination=null;
+        Map<Coordinate, Double> pitProbabilities=frontierPitProbability();
+        Map<Coordinate, Double> wumpusProbability=null;
+        if (w.wumpusAlive()){
+            wumpusProbability=frontierWumpusProbability();
+            for (Coordinate room : wumpusProbability.keySet()){
+                if (wumpusProbability.get(room)>0.9){
+                    shootWumpus(room);
+                    return room;
+                }
             }
         }
-        while (!current.equals(next)){
+        double factor=1;
+        for (Coordinate room : frontier){
+            double prob=pitProbabilities.get(room);
+            prob+= wumpusProbability!=null ? wumpusProbability.get(room) : 0;
+            if (prob<factor){
+                factor=prob;
+                destination=room;
+            }
+        }
+        return destination;
+    }
 
+    /**
+     * Calculate probabilities each frontier room has a pit
+     * @return
+     */
+
+    private Map<Coordinate, Double> frontierPitProbability(){
+        Map<Coordinate, Double> map=new HashMap<>();
+        List<List<Coordinate>> allCombinations=findCombinations(Math.min(3-knownPits.size(), frontier.size()));
+        for (Coordinate coordinate : frontier){
+            double hasPit=0;
+            double noPits=0;
+            for (List<Coordinate> combination : allCombinations){
+                if (matchKnownBreeze(combination)){
+                    if (combination.contains(coordinate)){
+                        hasPit+=Math.pow(0.2, combination.size())*Math.pow(0.8, frontier.size()-combination.size());
+                    }else {
+                        noPits+=Math.pow(0.2, combination.size())*Math.pow(0.8, frontier.size()-combination.size());
+                    }
+                }
+            }
+            hasPit/= (hasPit+noPits) >0 ? hasPit+noPits : 1;
+            map.put(coordinate, hasPit);
+        }
+        return map;
+    }
+
+    /**
+     * Calculate probabilities each frontier room has a pit
+     * @return
+     */
+
+    private Map<Coordinate, Double> frontierWumpusProbability(){
+        Map<Coordinate, Double> map=new HashMap<>();
+        List<List<Coordinate>> allCombinations=findCombinations(Math.min(1-knownWumpus.size(), frontier.size()));
+        for (Coordinate coordinate : frontier){
+            double hasWumpus=0;
+            double noWumpus=0;
+            for (List<Coordinate> combination : allCombinations){
+                if (matchKnownStench(combination)){
+                    if (combination.contains(coordinate)){
+                        hasWumpus+=Math.pow(1.0/15, combination.size())*Math.pow(1-1.0/15, frontier.size()-combination.size());
+                    }else {
+                        noWumpus+=Math.pow(1.0/15, combination.size())*Math.pow(1-1.0/15, frontier.size()-combination.size());
+                    }
+                }
+            }
+            hasWumpus/= (hasWumpus+noWumpus) >0 ? hasWumpus+noWumpus : 1;
+            map.put(coordinate, hasWumpus);
+        }
+        return map;
+    }
+
+    /**
+     * Find a path to destination room and move
+     * @param destination
+     */
+    private void moveToDestination(Coordinate destination){
+        //move
+        Coordinate next=coordinates[w.getPlayerX()-1][w.getPlayerY()-1];
+        while (next != destination){
+            Coordinate move=null;
+            int length=8;
+            for (Coordinate coordinate : next.neighbors){
+                if (w.isVisited(coordinate.x, coordinate.y) && manhattan(coordinate, destination)<length){
+                    move=coordinate;
+                    length=manhattan(coordinate, destination);
+                }
+            }
+            next=move;
+            moveToNeighbor(next);
+        }
+        //Update frontier and known
+        known.add(destination);
+        frontier.remove(destination);
+        for (Coordinate neighbor : destination.neighbors){
+            if (w.isUnknown(neighbor.x, neighbor.y)){
+                frontier.add(neighbor);
+            }
         }
     }
 
+    private void shootWumpus(Coordinate wumpus){
+        Coordinate destination=null;
+        for (Coordinate coordinate : wumpus.neighbors){
+            if (w.isVisited(coordinate.x, coordinate.y)){
+                destination=coordinate;
+                break;
+            }
+        }
+        moveToDestination(destination);
+        if (wumpus==destination.up){
+            turnDir(World.DIR_UP);
+            w.doAction(World.A_SHOOT);
+            return;
+        }
+        if (wumpus==destination.down){
+            turnDir(World.DIR_DOWN);
+            w.doAction(World.A_SHOOT);
+            return;
+        }
+        if (wumpus==destination.left){
+            turnDir(World.DIR_LEFT);
+            w.doAction(World.A_SHOOT);
+            return;
+        }
+        if (wumpus==destination.right){
+            turnDir(World.DIR_RIGHT);
+            w.doAction(World.A_SHOOT);
+            return;
+        }
+    }
+    /**
+     * Formalize combination tree to combination lists
+     * @param max
+     * @return
+     */
+    private List<List<Coordinate>> findCombinations(int max){
+        List<List<Coordinate>> result = new ArrayList<>();
+        result.add(new ArrayList<>());
+        for (int i=1 ; i<=max ; i++){
+            for (Coordinate coordinate : frontier){
+                TreeNode root=new TreeNode();
+                root.coordinate=coordinate;
+                root.depth=1;
+                List<TreeNode> leaves=new ArrayList<>();
+                buildCombinationTree(1, root, leaves);
+                for (TreeNode node : leaves){
+                    List<Coordinate> combination=new ArrayList<>();
+                    TreeNode next=node;
+                    while (next != null){
+                        combination.add(next.coordinate);
+                        next=next.parent;
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Check if a combination match unknown breeze info
+     * @param pitsAssumption
+     * @return
+     */
+
+    private boolean matchKnownBreeze(List<Coordinate> pitsAssumption){
+        for (Coordinate assumption : pitsAssumption){
+            for (Coordinate coordinate : assumption.neighbors){
+                if (w.isVisited(coordinate.x, coordinate.y) && !w.hasBreeze(coordinate.x, coordinate.y)){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Check if a combination match unknown stench info
+     * @param wumpusAssumption
+     * @return
+     */
+
+    private boolean matchKnownStench(List<Coordinate> wumpusAssumption){
+        for (Coordinate assumption : wumpusAssumption){
+            for (Coordinate coordinate : assumption.neighbors){
+                if (w.isVisited(coordinate.x, coordinate.y) && !w.hasStench(coordinate.x, coordinate.y)){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Manhattan distance
+     * @param start
+     * @param end
+     * @return
+     */
+    private int manhattan(Coordinate start, Coordinate end){
+        return Math.abs(start.x-end.x)+Math.abs(end.y-end.y);
+    }
+
+    /**
+     * Do move and turn actions to move to a neighbor
+     * @param neighbor
+     */
+    private void moveToNeighbor(Coordinate neighbor){
+        int x=w.getPlayerX();
+        int y=w.getPlayerY();
+        Coordinate current=coordinates[x-1][y-1];
+        if (neighbor==current.up){
+            turnDir(World.DIR_UP);
+            w.doAction(World.A_MOVE);
+            return;
+        }
+        if (neighbor==current.down){
+            turnDir(World.DIR_DOWN);
+            w.doAction(World.A_MOVE);
+            return;
+        }
+        if (neighbor==current.left){
+            turnDir(World.DIR_LEFT);
+            w.doAction(World.A_MOVE);
+            return;
+        }
+        if (neighbor==current.right){
+            turnDir(World.DIR_RIGHT);
+            w.doAction(World.A_MOVE);
+            return;
+        }
+    }
+
+    /**
+     * Adjust dir to move to a neighbor
+     * @param dir
+     */
+    private void turnDir(int dir){
+        if (dir != w.getDirection()){
+            switch (dir-w.getDirection()){
+                case 1:
+                case -3:
+                    w.doAction(World.A_TURN_RIGHT);
+                    break;
+                case 2:
+                case -2:
+                    w.doAction(World.A_TURN_RIGHT);
+                    w.doAction(World.A_TURN_RIGHT);
+                    break;
+                case 3:
+                case -1:
+                    w.doAction(World.A_TURN_LEFT);
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Build a tree to get frontier combinations for probability calculation
+     * @param maxdepth
+     * @param root
+     * @param leaves
+     */
+    private void buildCombinationTree(int maxdepth, TreeNode root, List<TreeNode> leaves){
+        if (maxdepth<2){
+            leaves.add(root);
+            return;
+        }
+        int index=frontier.indexOf(root.coordinate);
+        for (int i=index+1; i<frontier.size(); i++){
+            TreeNode node=new TreeNode();
+            node.coordinate=frontier.get(i);
+            node.parent=root;
+            node.depth=root.depth+1;
+            root.nexts.add(node);
+            buildCombinationTree(maxdepth-1, node, leaves);
+        }
+    }
 }
 
-
-
+/**
+ * Tree node for building combination tree
+ */
+class TreeNode{
+    TreeNode parent=null;
+    MyAgent.Coordinate coordinate;
+    int depth;
+    List<TreeNode> nexts=new ArrayList<>();
+}
