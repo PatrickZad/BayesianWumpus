@@ -20,8 +20,8 @@ public class MyAgent implements Agent
     private List<Coordinate> frontier=new ArrayList<>();
     private List<Coordinate> known=new ArrayList<>();
     private Coordinate[][] coordinates = new Coordinate[4][4];
-    private List<Coordinate> knownPits = new ArrayList<>();
-    private List<Coordinate> knownWumpus = new ArrayList<>();
+    //private List<Coordinate> knownPits = new ArrayList<>();
+    //private List<Coordinate> knownWumpus = new ArrayList<>();
 
     class Coordinate {
         final int x;
@@ -127,7 +127,7 @@ public class MyAgent implements Agent
         if (w.isInPit())
         {
             w.doAction(World.A_CLIMB);
-            knownPits.add(coordinates[w.getPlayerX()-1][w.getPlayerY()-1]);
+            //knownPits.add(coordinates[w.getPlayerX()-1][w.getPlayerY()-1]);
             return;
         }
 
@@ -239,7 +239,7 @@ public class MyAgent implements Agent
 
     private Map<Coordinate, Double> frontierPitProbability(){
         Map<Coordinate, Double> map=new HashMap<>();
-        List<List<Coordinate>> allCombinations=findCombinations(Math.min(3-knownPits.size(), frontier.size()));
+        List<List<Coordinate>> allCombinations=findCombinations(Math.min(3, frontier.size()));
         for (Coordinate coordinate : frontier){
             double hasPit=0;
             double noPits=0;
@@ -265,7 +265,7 @@ public class MyAgent implements Agent
 
     private Map<Coordinate, Double> frontierWumpusProbability(){
         Map<Coordinate, Double> map=new HashMap<>();
-        List<List<Coordinate>> allCombinations=findCombinations(Math.min(1-knownWumpus.size(), frontier.size()));
+        List<List<Coordinate>> allCombinations=findCombinations(1);
         for (Coordinate coordinate : frontier){
             double hasWumpus=0;
             double noWumpus=0;
@@ -378,13 +378,29 @@ public class MyAgent implements Agent
      */
 
     private boolean matchKnownBreeze(List<Coordinate> pitsAssumption){
+        for (Coordinate coordinate : frontier){
+            if (pitsAssumption.contains(coordinate)){
+                for (Coordinate neighbor : coordinate.neighbors){
+                    if (w.isVisited(neighbor.x, neighbor.y) && !w.hasBreeze(neighbor.x, neighbor.y)){
+                        return false;
+                    }
+                }
+            }else {
+                for (Coordinate neighbor : coordinate.neighbors){
+                    if (w.isVisited(neighbor.x, neighbor.y) && w.hasBreeze(neighbor.x, neighbor.y)){
+                        return false;
+                    }
+                }
+            }
+        }
+        /*
         for (Coordinate assumption : pitsAssumption){
             for (Coordinate coordinate : assumption.neighbors){
                 if (w.isVisited(coordinate.x, coordinate.y) && !w.hasBreeze(coordinate.x, coordinate.y)){
                     return false;
                 }
             }
-        }
+        }*/
         return true;
     }
 
@@ -395,13 +411,29 @@ public class MyAgent implements Agent
      */
 
     private boolean matchKnownStench(List<Coordinate> wumpusAssumption){
+        for (Coordinate coordinate : frontier){
+            if (wumpusAssumption.contains(coordinate)){
+                for (Coordinate neighbor : coordinate.neighbors){
+                    if (w.isVisited(neighbor.x, neighbor.y) && !w.hasStench(neighbor.x, neighbor.y)){
+                        return false;
+                    }
+                }
+            }else {
+                for (Coordinate neighbor : coordinate.neighbors){
+                    if (w.isVisited(neighbor.x, neighbor.y) && w.hasStench(neighbor.x, neighbor.y)){
+                        return false;
+                    }
+                }
+            }
+        }
+        /*
         for (Coordinate assumption : wumpusAssumption){
             for (Coordinate coordinate : assumption.neighbors){
                 if (w.isVisited(coordinate.x, coordinate.y) && !w.hasStench(coordinate.x, coordinate.y)){
                     return false;
                 }
             }
-        }
+        }*/
         return true;
     }
 
