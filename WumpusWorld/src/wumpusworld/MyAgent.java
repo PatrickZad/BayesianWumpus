@@ -26,16 +26,21 @@ public class MyAgent implements Agent
     class Coordinate {
         final int x;
         final int y;
-        final Coordinate left;
-        final Coordinate right;
-        final Coordinate up;
-        final Coordinate down;
+        Coordinate left;
+        Coordinate right;
+        Coordinate up;
+        Coordinate down;
         List<Coordinate> neighbors;
 
 
         public Coordinate(int x, int y){
             this.x=x;
             this.y=y;
+
+
+        }
+
+        public void generateNeighbors(){
             neighbors=new ArrayList<>();
             if (x>1){
                 left=coordinates[x-2][y-1];
@@ -64,7 +69,6 @@ public class MyAgent implements Agent
             }else {
                 down=null;
             }
-
         }
 
         public Coordinate getLeft() {
@@ -96,6 +100,10 @@ public class MyAgent implements Agent
         for (int i=0; i<4; i++){
             for (int j=0; j<4; j++)
             coordinates[i][j]=new Coordinate(i+1, j+1);
+        }
+        for (int i=0; i<4; i++){
+            for (int j=0; j<4; j++)
+                coordinates[i][j].generateNeighbors();
         }
         known.add(coordinates[0][0]);
         frontier.add(coordinates[0][1]);
@@ -357,7 +365,7 @@ public class MyAgent implements Agent
                 root.coordinate=coordinate;
                 root.depth=1;
                 List<TreeNode> leaves=new ArrayList<>();
-                buildCombinationTree(1, root, leaves);
+                buildCombinationTree(i, root, leaves);
                 for (TreeNode node : leaves){
                     List<Coordinate> combination=new ArrayList<>();
                     TreeNode next=node;
@@ -365,6 +373,7 @@ public class MyAgent implements Agent
                         combination.add(next.coordinate);
                         next=next.parent;
                     }
+                    result.add(combination);
                 }
             }
         }
