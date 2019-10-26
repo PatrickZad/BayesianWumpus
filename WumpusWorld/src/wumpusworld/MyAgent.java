@@ -228,7 +228,7 @@ public class MyAgent implements Agent
                 }
             }
         }
-        double factor=1;
+        double factor=2;
         for (Coordinate room : frontier){
             double prob=pitProbabilities.get(room);
             prob+= wumpusProbability!=null ? wumpusProbability.get(room) : 0;
@@ -299,7 +299,10 @@ public class MyAgent implements Agent
     private void moveToDestination(Coordinate destination){
         //move
         Coordinate next=coordinates[w.getPlayerX()-1][w.getPlayerY()-1];
-        while (next != destination){
+        if (next == destination){
+            return;
+        }
+        while (!next.neighbors.contains(destination)){
             Coordinate move=null;
             int length=8;
             for (Coordinate coordinate : next.neighbors){
@@ -311,11 +314,15 @@ public class MyAgent implements Agent
             next=move;
             moveToNeighbor(next);
         }
+        moveToNeighbor(destination);
         //Update frontier and known
-        known.add(destination);
+        if (!known.contains(destination)){
+            known.add(destination);
+        }
+
         frontier.remove(destination);
         for (Coordinate neighbor : destination.neighbors){
-            if (w.isUnknown(neighbor.x, neighbor.y)){
+            if (w.isUnknown(neighbor.x, neighbor.y) && !frontier.contains(neighbor)){
                 frontier.add(neighbor);
             }
         }
@@ -387,6 +394,30 @@ public class MyAgent implements Agent
      */
 
     private boolean matchKnownBreeze(List<Coordinate> pitsAssumption){
+        for (Coordinate coordinate : known){
+            if (w.hasBreeze(coordinate.x, coordinate.y)){
+                int unknownNeighbors=0;
+                int unknownAssumption=0;
+                for (Coordinate neighbor : coordinate.neighbors){
+                    if (w.isUnknown(neighbor.x, neighbor.y)){
+                        unknownNeighbors++;
+                        if (pitsAssumption.contains(neighbor)){
+                            unknownAssumption++;
+                        }
+                    }
+                }
+                if (unknownNeighbors>0 && unknownAssumption==0){
+                    return false;
+                }
+            }else {
+                for (Coordinate neighbor : coordinate.neighbors){
+                    if (pitsAssumption.contains(neighbor)){
+                        return false;
+                    }
+                }
+            }
+        }
+        /*
         for (Coordinate coordinate : frontier){
             if (pitsAssumption.contains(coordinate)){
                 for (Coordinate neighbor : coordinate.neighbors){
@@ -401,7 +432,7 @@ public class MyAgent implements Agent
                     }
                 }
             }
-        }
+        }*/
         /*
         for (Coordinate assumption : pitsAssumption){
             for (Coordinate coordinate : assumption.neighbors){
@@ -420,6 +451,30 @@ public class MyAgent implements Agent
      */
 
     private boolean matchKnownStench(List<Coordinate> wumpusAssumption){
+        for (Coordinate coordinate : known){
+            if (w.hasStench(coordinate.x, coordinate.y)){
+                int unknownAssumption=0;
+                int unknownNeighbors=0;
+                for (Coordinate neighbor : coordinate.neighbors){
+                    if (w.isUnknown(neighbor.x, neighbor.y)){
+                        unknownNeighbors++;
+                        if (wumpusAssumption.contains(neighbor)){
+                            unknownAssumption++;
+                        }
+                    }
+                }
+                if (unknownNeighbors>0 && unknownAssumption==0){
+                    return false;
+                }
+            }else {
+                for (Coordinate neighbor : coordinate.neighbors){
+                    if (wumpusAssumption.contains(neighbor)){
+                        return false;
+                    }
+                }
+            }
+        }
+        /*
         for (Coordinate coordinate : frontier){
             if (wumpusAssumption.contains(coordinate)){
                 for (Coordinate neighbor : coordinate.neighbors){
@@ -434,7 +489,7 @@ public class MyAgent implements Agent
                     }
                 }
             }
-        }
+        }*/
         /*
         for (Coordinate assumption : wumpusAssumption){
             for (Coordinate coordinate : assumption.neighbors){
