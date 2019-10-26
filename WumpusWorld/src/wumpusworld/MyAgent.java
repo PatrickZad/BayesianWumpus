@@ -417,30 +417,6 @@ public class MyAgent implements Agent
                 }
             }
         }
-        /*
-        for (Coordinate coordinate : frontier){
-            if (pitsAssumption.contains(coordinate)){
-                for (Coordinate neighbor : coordinate.neighbors){
-                    if (w.isVisited(neighbor.x, neighbor.y) && !w.hasBreeze(neighbor.x, neighbor.y)){
-                        return false;
-                    }
-                }
-            }else {
-                for (Coordinate neighbor : coordinate.neighbors){
-                    if (w.isVisited(neighbor.x, neighbor.y) && w.hasBreeze(neighbor.x, neighbor.y)){
-                        return false;
-                    }
-                }
-            }
-        }*/
-        /*
-        for (Coordinate assumption : pitsAssumption){
-            for (Coordinate coordinate : assumption.neighbors){
-                if (w.isVisited(coordinate.x, coordinate.y) && !w.hasBreeze(coordinate.x, coordinate.y)){
-                    return false;
-                }
-            }
-        }*/
         return true;
     }
 
@@ -474,30 +450,6 @@ public class MyAgent implements Agent
                 }
             }
         }
-        /*
-        for (Coordinate coordinate : frontier){
-            if (wumpusAssumption.contains(coordinate)){
-                for (Coordinate neighbor : coordinate.neighbors){
-                    if (w.isVisited(neighbor.x, neighbor.y) && !w.hasStench(neighbor.x, neighbor.y)){
-                        return false;
-                    }
-                }
-            }else {
-                for (Coordinate neighbor : coordinate.neighbors){
-                    if (w.isVisited(neighbor.x, neighbor.y) && w.hasStench(neighbor.x, neighbor.y)){
-                        return false;
-                    }
-                }
-            }
-        }*/
-        /*
-        for (Coordinate assumption : wumpusAssumption){
-            for (Coordinate coordinate : assumption.neighbors){
-                if (w.isVisited(coordinate.x, coordinate.y) && !w.hasStench(coordinate.x, coordinate.y)){
-                    return false;
-                }
-            }
-        }*/
         return true;
     }
 
