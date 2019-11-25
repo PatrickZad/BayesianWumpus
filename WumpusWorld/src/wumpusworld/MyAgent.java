@@ -20,6 +20,7 @@ public class MyAgent implements Agent
     private List<Coordinate> frontier=new ArrayList<>();
     private List<Coordinate> known=new ArrayList<>();
     private Coordinate[][] coordinates = new Coordinate[4][4];
+    private List<Coordinate> knownPits=new ArrayList<>();
     //private List<Coordinate> knownPits = new ArrayList<>();
     //private List<Coordinate> knownWumpus = new ArrayList<>();
 
@@ -86,6 +87,7 @@ public class MyAgent implements Agent
         public Coordinate getDown() {
             return down;
         }
+
     }
     
     /**
@@ -134,6 +136,7 @@ public class MyAgent implements Agent
         //We are in a pit. Climb up.
         if (w.isInPit())
         {
+            knownPits.add(currentPosition());
             w.doAction(World.A_CLIMB);
             //knownPits.add(coordinates[w.getPlayerX()-1][w.getPlayerY()-1]);
             return;
@@ -229,15 +232,24 @@ public class MyAgent implements Agent
             }
         }
         double factor=2;
+        List<Coordinate> sameDestination=new ArrayList<>();
         for (Coordinate room : frontier){
             double prob=pitProbabilities.get(room);
             prob+= wumpusProbability!=null ? wumpusProbability.get(room) : 0;
             if (prob<factor){
                 factor=prob;
-                destination=room;
-            }
+                sameDestination.clear();
+                sameDestination.add(room);
+            }else
+                if (prob==factor){
+                    sameDestination.add(room);
+                }
         }
-        return destination;
+        if (sameDestination.size()>1){
+            Random rand=new Random();
+            return sameDestination.get(rand.nextInt(sameDestination.size()));
+        }
+        return sameDestination.get(0);
     }
 
     /**
@@ -247,7 +259,7 @@ public class MyAgent implements Agent
 
     private Map<Coordinate, Double> frontierPitProbability(){
         Map<Coordinate, Double> map=new HashMap<>();
-        List<List<Coordinate>> allCombinations=findCombinations(Math.min(3, frontier.size()));
+        List<List<Coordinate>> allCombinations=findCombinations(Math.min(3-knownPits.size(), frontier.size()));
         for (Coordinate coordinate : frontier){
             double hasPit=0;
             double noPits=0;
@@ -302,16 +314,30 @@ public class MyAgent implements Agent
         if (next == destination){
             return;
         }
+        Map<Coordinate, Coordinate> walked=new HashMap<>();//key is walked room, value is its previous walked room
+        walked.put(next, null);
         while (!next.neighbors.contains(destination)){
             Coordinate move=null;
             int length=8;
             for (Coordinate coordinate : next.neighbors){
-                if (w.isVisited(coordinate.x, coordinate.y) && manhattan(coordinate, destination)<length){
-                    move=coordinate;
-                    length=manhattan(coordinate, destination);
+                if (w.isVisited(coordinate.x, coordinate.y) && manhattan(coordinate, destination)<=length){
+                    move = coordinate;
+                    length = manhattan(coordinate, destination);
                 }
             }
-            next=move;
+            if (!walked.containsKey(move)){
+                next=move;
+                walked.put(next,currentPosition());
+            }else {
+                moveToNeighbor(move);
+                int biglength=8;
+                for (Coordinate neighbor : move.neighbors){
+                    if (w.isVisited(neighbor.x, neighbor.y) && manhattan(neighbor, destination)<=biglength && !walked.containsKey(neighbor)){
+                        next=neighbor;
+                        biglength = manhattan(neighbor, destination);
+                    }
+                }
+            }
             moveToNeighbor(next);
         }
         moveToNeighbor(destination);
@@ -330,10 +356,12 @@ public class MyAgent implements Agent
 
     private void shootWumpus(Coordinate wumpus){
         Coordinate destination=null;
+        int distance=7;
         for (Coordinate coordinate : wumpus.neighbors){
-            if (w.isVisited(coordinate.x, coordinate.y)){
+            int newDistance=manhattan(coordinate, coordinates[w.getPlayerX()-1][w.getPlayerY()-1]);
+            if (w.isVisited(coordinate.x, coordinate.y) && newDistance<distance){
                 destination=coordinate;
-                break;
+                distance=newDistance;
             }
         }
         moveToDestination(destination);
@@ -388,33 +416,41 @@ public class MyAgent implements Agent
     }
 
     /**
-     * Check if a combination match unknown breeze info
+     * Check if a combination match known breeze info
      * @param pitsAssumption
      * @return
      */
 
     private boolean matchKnownBreeze(List<Coordinate> pitsAssumption){
-        for (Coordinate coordinate : known){
-            if (w.hasBreeze(coordinate.x, coordinate.y)){
-                int unknownNeighbors=0;
-                int unknownAssumption=0;
-                for (Coordinate neighbor : coordinate.neighbors){
-                    if (w.isUnknown(neighbor.x, neighbor.y)){
-                        unknownNeighbors++;
-                        if (pitsAssumption.contains(neighbor)){
-                            unknownAssumption++;
-                        }
-                    }
+        List<Coordinate> assumptBreezes=new ArrayList<>();
+        for (Coordinate assumpt : pitsAssumption){
+            for (Coordinate neighbor : assumpt.neighbors){
+                if (known.contains(neighbor) && !assumptBreezes.contains(neighbor)){
+                    assumptBreezes.add(neighbor);
                 }
-                if (unknownNeighbors>0 && unknownAssumption==0){
-                    return false;
+            }
+        }
+        for (Coordinate knownPit : knownPits){
+            for (Coordinate neighbor : knownPit.neighbors){
+                if (known.contains(neighbor) && !assumptBreezes.contains(neighbor)){
+                    assumptBreezes.add(neighbor);
                 }
-            }else {
-                for (Coordinate neighbor : coordinate.neighbors){
-                    if (pitsAssumption.contains(neighbor)){
-                        return false;
-                    }
+            }
+        }
+        List<Coordinate> knownFrontier=new ArrayList<>();
+        for (Coordinate front : frontier){
+            for (Coordinate neighbor : front.neighbors){
+                if (known.contains(neighbor) && !knownFrontier.contains(neighbor)){
+                    knownFrontier.add(neighbor);
                 }
+            }
+        }
+        for (Coordinate knownFront : knownFrontier){
+            if (assumptBreezes.contains(knownFront) && !w.hasBreeze(knownFront.x, knownFront.y)){
+                return false;
+            }
+            if (!assumptBreezes.contains(knownFront) && w.hasBreeze(knownFront.x, knownFront.y)){
+                return false;
             }
         }
         return true;
@@ -427,27 +463,28 @@ public class MyAgent implements Agent
      */
 
     private boolean matchKnownStench(List<Coordinate> wumpusAssumption){
-        for (Coordinate coordinate : known){
-            if (w.hasStench(coordinate.x, coordinate.y)){
-                int unknownAssumption=0;
-                int unknownNeighbors=0;
-                for (Coordinate neighbor : coordinate.neighbors){
-                    if (w.isUnknown(neighbor.x, neighbor.y)){
-                        unknownNeighbors++;
-                        if (wumpusAssumption.contains(neighbor)){
-                            unknownAssumption++;
-                        }
-                    }
+        List<Coordinate> assumptStenchs=new ArrayList<>();
+        for (Coordinate assumpt : wumpusAssumption){
+            for (Coordinate neighbor : assumpt.neighbors){
+                if (known.contains(neighbor) && !assumptStenchs.contains(neighbor)){
+                    assumptStenchs.add(neighbor);
                 }
-                if (unknownNeighbors>0 && unknownAssumption==0){
-                    return false;
+            }
+        }
+        List<Coordinate> knownFrontier=new ArrayList<>();
+        for (Coordinate front : frontier){
+            for (Coordinate neighbor : front.neighbors){
+                if (known.contains(neighbor) && !knownFrontier.contains(neighbor)){
+                    knownFrontier.add(neighbor);
                 }
-            }else {
-                for (Coordinate neighbor : coordinate.neighbors){
-                    if (wumpusAssumption.contains(neighbor)){
-                        return false;
-                    }
-                }
+            }
+        }
+        for (Coordinate knownFront : knownFrontier){
+            if (assumptStenchs.contains(knownFront) && !w.hasStench(knownFront.x, knownFront.y)){
+                return false;
+            }
+            if (!assumptStenchs.contains(knownFront) && w.hasStench(knownFront.x, knownFront.y)){
+                return false;
             }
         }
         return true;
@@ -537,6 +574,10 @@ public class MyAgent implements Agent
             root.nexts.add(node);
             buildCombinationTree(maxdepth-1, node, leaves);
         }
+    }
+
+    private Coordinate currentPosition(){
+        return coordinates[w.getPlayerX()-1][w.getPlayerY()-1];
     }
 }
 
