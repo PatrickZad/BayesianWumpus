@@ -219,7 +219,6 @@ public class MyAgent implements Agent
      * @return
      */
     private Coordinate selectFrontier(){
-        Coordinate destination=null;
         Map<Coordinate, Double> pitProbabilities=frontierPitProbability();
         Map<Coordinate, Double> wumpusProbability=null;
         if (w.wumpusAlive()){
@@ -309,38 +308,33 @@ public class MyAgent implements Agent
      * @param destination
      */
     private void moveToDestination(Coordinate destination){
-        //move
-        Coordinate next=coordinates[w.getPlayerX()-1][w.getPlayerY()-1];
-        if (next == destination){
+        if (destination==currentPosition()){
             return;
         }
-        Map<Coordinate, Coordinate> walked=new HashMap<>();//key is walked room, value is its previous walked room
-        walked.put(next, null);
-        while (!next.neighbors.contains(destination)){
-            Coordinate move=null;
-            int length=8;
-            for (Coordinate coordinate : next.neighbors){
-                if (w.isVisited(coordinate.x, coordinate.y) && manhattan(coordinate, destination)<=length){
-                    move = coordinate;
-                    length = manhattan(coordinate, destination);
-                }
-            }
-            if (!walked.containsKey(move)){
-                next=move;
-                walked.put(next,currentPosition());
-            }else {
-                moveToNeighbor(move);
-                int biglength=8;
-                for (Coordinate neighbor : move.neighbors){
-                    if (w.isVisited(neighbor.x, neighbor.y) && manhattan(neighbor, destination)<=biglength && !walked.containsKey(neighbor)){
-                        next=neighbor;
-                        biglength = manhattan(neighbor, destination);
+        if (!currentPosition().neighbors.contains(destination)){
+            //search tree method
+            PathNode root=new PathNode(null, currentPosition());
+            List<PathNode> leaves=new ArrayList<>();
+            buildPath(root, destination, leaves);
+            PathNode destNode=leaves.get(0);
+            List<Coordinate> path=destNode.parentCoordinates;
+            path.add(destNode.coordinate);
+            if (leaves.size()>1){
+                for (int i=1; i<leaves.size(); i++){
+                    List<Coordinate> newPath=leaves.get(i).parentCoordinates;
+                    newPath.add(leaves.get(i).coordinate);
+                    if (pathLength(newPath)<pathLength(path)){
+                        path=newPath;
                     }
                 }
             }
-            moveToNeighbor(next);
+            path.add(destNode.coordinate);
+            for (int i=1; i<path.size();i++){
+                moveToNeighbor(path.get(i));
+            }
         }
         moveToNeighbor(destination);
+        //move
         //Update frontier and known
         if (!known.contains(destination)){
             known.add(destination);
@@ -579,6 +573,32 @@ public class MyAgent implements Agent
     private Coordinate currentPosition(){
         return coordinates[w.getPlayerX()-1][w.getPlayerY()-1];
     }
+
+    private void buildPath(PathNode root, Coordinate destination, List<PathNode> validLeaves){
+        if (root.coordinate.neighbors.contains(destination)){
+            validLeaves.add(root);
+            return;
+        }
+        for (Coordinate neighbor : root.coordinate.neighbors){
+            if (known.contains(neighbor) && !root.parentCoordinates.contains(neighbor)){
+                PathNode subNode=new PathNode(root, neighbor);
+                root.nexts.add(subNode);
+                buildPath(subNode, destination, validLeaves);
+            }
+        }
+    }
+
+    private int pathLength(List<Coordinate> path){
+        int length=0;
+        for (Coordinate room : path){
+            if (knownPits.contains(room)){
+                length+=17;
+            }else {
+                length++;
+            }
+        }
+        return length;
+    }
 }
 
 /**
@@ -589,4 +609,22 @@ class TreeNode{
     MyAgent.Coordinate coordinate;
     int depth;
     List<TreeNode> nexts=new ArrayList<>();
+}
+
+/**
+ *Tree node for searching move path
+ */
+class PathNode{
+    PathNode parent=null;
+    MyAgent.Coordinate coordinate;
+    List<PathNode> nexts=new ArrayList<>();
+    List<MyAgent.Coordinate> parentCoordinates=new ArrayList<>();
+    PathNode(PathNode parent, MyAgent.Coordinate coordinate){
+        this.parent=parent;
+        this.coordinate=coordinate;
+        if (parent!=null){
+            parentCoordinates.addAll(parent.parentCoordinates);
+            parentCoordinates.add(parent.coordinate);
+        }
+    }
 }
